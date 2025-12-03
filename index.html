@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>HTML/JS раннер с проектами</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, system-ui, sans-serif;
+      background: #111827;
+      color: #e5e7eb;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: 8px 12px;
+      background: #020617;
+      border-bottom: 1px solid #1f2937;
+      font-size: 14px;
+    }
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 8px;
+      gap: 8px;
+    }
+    textarea {
+      flex: 1;
+      width: 100%;
+      min-height: 40vh;
+      resize: none;
+      border-radius: 4px;
+      border: 1px solid #374151;
+      background: #020617;
+      color: #e5e7eb;
+      padding: 8px;
+      font-family: Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      outline: none;
+    }
+    .controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .hint {
+      font-size: 12px;
+      color: #9ca3af;
+    }
+    button {
+      padding: 6px 10px;
+      font-size: 13px;
+      border-radius: 999px;
+      border: 1px solid #4b5563;
+      background: #111827;
+      color: #e5e7eb;
+      cursor: pointer;
+    }
+    button:active {
+      transform: scale(0.97);
+    }
+    .projects-section-title {
+      margin-top: 4px;
+      font-size: 13px;
+      color: #9ca3af;
+    }
+    .projects {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 4px;
+    }
+    .project-card {
+      border-radius: 8px;
+      border: 1px solid #1f2937;
+      background: #020617;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .project-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .project-name {
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .project-dates {
+      font-size: 11px;
+      color: #9ca3af;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+    .project-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+    .btn-small {
+      padding: 4px 8px;
+      font-size: 12px;
+      border-radius: 999px;
+    }
+    .btn-primary {
+      border-color: #3b82f6;
+      background: #1d4ed8;
+      color: #dbeafe;
+    }
+    .btn-ghost {
+      border-color: #4b5563;
+      background: #111827;
+      color: #e5e7eb;
+    }
+    .project-card.selected {
+      border-color: #22c55e;
+      box-shadow: 0 0 0 1px rgba(34,197,94,0.3);
+    }
+    .current-project-label {
+      font-size: 12px;
+      color: #a3e635;
+    }
+  </style>
+</head>
+<body>
+  <header>HTML/JS раннер с проектами</header>
+  <main>
+    <div class="hint">
+      Вставь ниже свой <strong>HTML + JS</strong>.<br>
+      Зелёная кнопка <b>▶ Запустить</b> в правом нижнем углу перезапишет страницу твоим кодом.<br>
+      В режиме запущенного кода появится красная <b>⏹ STOP</b>, которая вернёт тебя в этот раннер.
+    </div>
+
+    <div class="controls">
+      <button id="clearBtn">Очистить поле</button>
+      <button id="saveBtn" style="display:none;">Сохранить проект</button>
+      <button id="deleteBtn" style="display:none;">Удалить проект</button>
+      <span id="currentProjectLabel" class="current-project-label" style="display:none;"></span>
+    </div>
+
+    <textarea id="code" spellcheck="false"><!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Тест раннера</title>
+</head>
+<body style="font-family:-apple-system,system-ui,sans-serif;padding:16px">
+  <h1>Мой код</h1>
+  <p>Если ты это видишь — страница перезаписана твоим HTML.</p>
+  <button onclick="alert('JS работает!')">Проверить JS</button>
+</body>
+</html></textarea>
+
+    <div class="projects-section-title">Проекты</div>
+    <div id="projects" class="projects"></div>
+  </main>
+
+  <script>
+    (function () {
+      // --- Общие переменные раннера ---
+      if (!window.__RUNNER_ORIGINAL_HTML__) {
+        window.__RUNNER_ORIGINAL_HTML__ = document.documentElement.outerHTML;
+      }
+
+      var textarea  = document.getElementById('code');
+      var clearBtn  = document.getElementById('clearBtn');
+      var saveBtn   = document.getElementById('saveBtn');
+      var deleteBtn = document.getElementById('deleteBtn');
+      var currentProjectLabel = document.getElementById('currentProjectLabel');
+      var projectsContainer   = document.getElementById('projects');
+
+      var STORAGE_KEY = 'html_js_runner_projects_v1';
+      var projects = [];
+      var currentProjectId = null;
+
+      // --- Утилиты для дат ---
+      function formatDateTime(iso) {
+        if (!iso) return '';
+        try {
+          var d = new Date(iso);
+          var dd = String(d.getDate()).padStart(2, '0');
+          var mm = String(d.getMonth() + 1).padStart(2, '0');
+          var yyyy = d.getFullYear();
+          var hh = String(d.getHours()).padStart(2, '0');
+          var min = String(d.getMinutes()).padStart(2, '0');
+          return dd + '.' + mm + '.' + yyyy + ' ' + hh + ':' + min;
+        } catch (e) {
+          return iso;
+        }
+      }
+
+      function generateId() {
+        return 'p_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      }
+
+      // --- localStorage-хранилище проектов ---
+      function loadProjects() {
+        try {
+          var raw = window.localStorage && localStorage.getItem(STORAGE_KEY);
+          if (!raw) return [];
+          var parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) return parsed;
+          return [];
+        } catch (e) {
+          console.log('loadProjects error', e);
+          return [];
+        }
+      }
+
+      function saveProjects() {
+        try {
+          if (!window.localStorage) return;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+        } catch (e) {
+          console.log('saveProjects error', e);
+        }
+      }
+
+      function findProject(id) {
+        return projects.find(function (p) { return p.id === id; }) || null;
+      }
+
+      function setCurrentProject(id) {
+        currentProjectId = id || null;
+        updateProjectControlsUI();
+        renderProjects(); // чтобы подсветить выбранный
+      }
+
+      function updateProjectControlsUI() {
+        if (currentProjectId) {
+          saveBtn.style.display = '';
+          deleteBtn.style.display = '';
+          var p = findProject(currentProjectId);
+          if (p) {
+            currentProjectLabel.style.display = '';
+            currentProjectLabel.textContent = 'Текущий проект: ' + (p.name || 'без названия');
+          } else {
+            currentProjectLabel.style.display = 'none';
+          }
+        } else {
+          saveBtn.style.display = 'none';
+          deleteBtn.style.display = 'none';
+          currentProjectLabel.style.display = 'none';
+        }
+      }
+
+      // --- Рендер списка проектов ---
+      function renderProjects() {
+        projectsContainer.innerHTML = '';
+
+        if (!projects.length) {
+          var empty = document.createElement('div');
+          empty.style.fontSize = '12px';
+          empty.style.color = '#6b7280';
+          empty.textContent = 'Проектов пока нет. Сохрани текущий код как проект.';
+          projectsContainer.appendChild(empty);
+          return;
+        }
+
+        // сортируем по дате изменения/создания (новые сверху)
+        var sorted = projects.slice().sort(function (a, b) {
+          var da = new Date(a.updatedAt || a.createdAt || 0).getTime();
+          var db = new Date(b.updatedAt || b.createdAt || 0).getTime();
+          return db - da;
+        });
+
+        sorted.forEach(function (p) {
+          var card = document.createElement('div');
+          card.className = 'project-card';
+          if (p.id === currentProjectId) {
+            card.classList.add('selected');
+          }
+
+          var header = document.createElement('div');
+          header.className = 'project-card-header';
+
+          var nameEl = document.createElement('div');
+          nameEl.className = 'project-name';
+          nameEl.textContent = p.name || 'Без названия';
+
+          var datesEl = document.createElement('div');
+          datesEl.className = 'project-dates';
+          var created = document.createElement('div');
+          created.textContent = 'Создан: ' + formatDateTime(p.createdAt);
+          var updated = document.createElement('div');
+          updated.textContent = 'Изменён: ' + formatDateTime(p.updatedAt || p.createdAt);
+          datesEl.appendChild(created);
+          datesEl.appendChild(updated);
+
+          header.appendChild(nameEl);
+          header.appendChild(datesEl);
+
+          var actions = document.createElement('div');
+          actions.className = 'project-actions';
+
+          var openBtn = document.createElement('button');
+          openBtn.className = 'btn-small btn-ghost';
+          openBtn.textContent = 'Открыть';
+          openBtn.onclick = function () {
+            textarea.value = p.code || '';
+            setCurrentProject(p.id);
+            // синхронизируем с window.name
+            try {
+              window.name = JSON.stringify({ userCode: textarea.value });
+            } catch (e) {}
+          };
+
+          var runBtn = document.createElement('button');
+          runBtn.className = 'btn-small btn-primary';
+          runBtn.textContent = 'Запустить';
+          runBtn.onclick = function () {
+            textarea.value = p.code || '';
+            setCurrentProject(p.id);
+            try {
+              window.name = JSON.stringify({ userCode: textarea.value });
+            } catch (e) {}
+            executeCurrentCode();
+          };
+
+          actions.appendChild(openBtn);
+          actions.appendChild(runBtn);
+
+          card.appendChild(header);
+          card.appendChild(actions);
+
+          projectsContainer.appendChild(card);
+        });
+      }
+
+      // --- Работа с текущим кодом / проектом ---
+      clearBtn.addEventListener('click', function () {
+        textarea.value = '';
+        // не сбрасываю проект, вдруг человек хочет очистить и потом сохранить
+      });
+
+      saveBtn.addEventListener('click', function () {
+        var code = textarea.value || '';
+        var now = new Date().toISOString();
+
+        if (!currentProjectId) {
+          var name = prompt('Название проекта:', 'Новый проект');
+          if (name === null) return; // отмена
+          if (!name.trim()) name = 'Без названия';
+
+          var newProj = {
+            id: generateId(),
+            name: name,
+            code: code,
+            createdAt: now,
+            updatedAt: now
+          };
+          projects.push(newProj);
+          saveProjects();
+          setCurrentProject(newProj.id);
+        } else {
+          var existing = findProject(currentProjectId);
+          if (!existing) {
+            // если вдруг проект потерялся, создаём новый
+            var name2 = prompt('Название проекта:', 'Новый проект');
+            if (name2 === null) return;
+            if (!name2.trim()) name2 = 'Без названия';
+            var p2 = {
+              id: generateId(),
+              name: name2,
+              code: code,
+              createdAt: now,
+              updatedAt: now
+            };
+            projects.push(p2);
+            saveProjects();
+            setCurrentProject(p2.id);
+          } else {
+            existing.code = code;
+            existing.updatedAt = now;
+            saveProjects();
+            renderProjects();
+          }
+        }
+      });
+
+      deleteBtn.addEventListener('click', function () {
+        if (!currentProjectId) return;
+        var p = findProject(currentProjectId);
+        var name = p ? (p.name || 'без названия') : '';
+        if (!confirm('Удалить проект "' + name + '"?')) return;
+
+        projects = projects.filter(function (pr) { return pr.id !== currentProjectId; });
+        saveProjects();
+        currentProjectId = null;
+        updateProjectControlsUI();
+        renderProjects();
+        // код в textarea не трогаем, пусть остаётся
+      });
+
+      // --- Плавающие кнопки RUN/STOP ---
+      function executeCurrentCode() {
+        var userCode = textarea.value || '<h1>Пусто</h1>';
+        window.__RUNNER_LAST_CODE__ = userCode;
+
+        try {
+          window.name = JSON.stringify({ userCode: userCode });
+        } catch (e) {}
+
+        document.open();
+        document.write(userCode);
+        document.close();
+
+        installStopButtonInUserPage();
+      }
+
+      function installRunButton() {
+        if (document.getElementById('__runner_action_run__')) return;
+
+        function add() {
+          if (!document.body) {
+            setTimeout(add, 50);
+            return;
+          }
+          if (document.getElementById('__runner_action_run__')) return;
+
+          var b = document.createElement('button');
+          b.id = '__runner_action_run__';
+          b.textContent = '▶ Запустить';
+          var s = b.style;
+          s.position = 'fixed';
+          s.right = '8px';
+          s.bottom = '8px';
+          s.zIndex = '999999';
+          s.padding = '8px 14px';
+          s.fontSize = '13px';
+          s.borderRadius = '999px';
+          s.border = '1px solid #22c55e';
+          s.background = '#16a34a';
+          s.color = '#ecfdf5';
+          s.cursor = 'pointer';
+          s.boxShadow = '0 4px 10px rgba(0,0,0,0.6)';
+
+          b.onclick = function () {
+            executeCurrentCode();
+          };
+
+          document.body.appendChild(b);
+        }
+
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', add);
+        } else {
+          add();
+        }
+      }
+
+      function installStopButtonInUserPage() {
+        function add() {
+          if (!document.body) {
+            setTimeout(add, 50);
+            return;
+          }
+          if (document.getElementById('__runner_stop__')) return;
+
+          var b = document.createElement('button');
+          b.id = '__runner_stop__';
+          b.textContent = '⏹ STOP';
+          var s = b.style;
+          s.position = 'fixed';
+          s.right = '8px';
+          s.bottom = '8px';
+          s.zIndex = '999999';
+          s.padding = '8px 14px';
+          s.fontSize = '13px';
+          s.borderRadius = '999px';
+          s.border = '1px solid #f97373';
+          s.background = '#b91c1c';
+          s.color = '#fee2e2';
+          s.cursor = 'pointer';
+          s.boxShadow = '0 4px 10px rgba(0,0,0,0.6)';
+
+          b.onclick = function () {
+            try {
+              if (window.__RUNNER_ORIGINAL_HTML__) {
+                document.open();
+                document.write(window.__RUNNER_ORIGINAL_HTML__);
+                document.close();
+                // после возврата в раннер — снова ставим RUN и отрисовываем проекты
+                // (скрипт выполнится заново)
+              } else {
+                location.reload();
+              }
+            } catch (e) {
+              location.reload();
+            }
+          };
+
+          document.body.appendChild(b);
+        }
+
+        add();
+      }
+
+      // --- Инициализация ---
+      // восстановление кода из window.name, если это не проект
+      try {
+        if (!currentProjectId && window.name) {
+          var state = JSON.parse(window.name);
+          if (state && typeof state.userCode === 'string') {
+            textarea.value = state.userCode;
+          }
+        }
+      } catch (e) {}
+
+      // грузим проекты из localStorage
+      projects = loadProjects();
+      renderProjects();
+      updateProjectControlsUI();
+
+      // ставим зелёную кнопку RUN
+      installRunButton();
+    })();
+  </script>
+</body>
+</html>
