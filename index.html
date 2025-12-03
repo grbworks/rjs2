@@ -140,13 +140,13 @@
   <main>
     <div class="hint">
       Вставь ниже свой <strong>HTML + JS</strong>.<br>
-      Зелёная кнопка <b>▶ Запустить</b> в правом нижнем углу перезапишет страницу твоим кодом.<br>
+      Зелёная кнопка <b>▶ Запустить</b> в правом нижнем углу запускает код из редактора.<br>
       В режиме запущенного кода появится красная <b>⏹ STOP</b>, которая вернёт тебя в этот раннер.
     </div>
 
     <div class="controls">
       <button id="clearBtn">Очистить поле</button>
-      <button id="saveBtn" style="display:none;">Сохранить проект</button>
+      <button id="saveBtn">Сохранить проект</button>
       <button id="deleteBtn" style="display:none;">Удалить проект</button>
       <span id="currentProjectLabel" class="current-project-label" style="display:none;"></span>
     </div>
@@ -240,8 +240,8 @@
       }
 
       function updateProjectControlsUI() {
+        // saveBtn всегда показываем — он создаёт новый или обновляет текущий
         if (currentProjectId) {
-          saveBtn.style.display = '';
           deleteBtn.style.display = '';
           var p = findProject(currentProjectId);
           if (p) {
@@ -251,7 +251,6 @@
             currentProjectLabel.style.display = 'none';
           }
         } else {
-          saveBtn.style.display = 'none';
           deleteBtn.style.display = 'none';
           currentProjectLabel.style.display = 'none';
         }
@@ -265,7 +264,7 @@
           var empty = document.createElement('div');
           empty.style.fontSize = '12px';
           empty.style.color = '#6b7280';
-          empty.textContent = 'Проектов пока нет. Сохрани текущий код как проект.';
+          empty.textContent = 'Проектов пока нет. Набери код и нажми «Сохранить проект».';
           projectsContainer.appendChild(empty);
           return;
         }
@@ -312,7 +311,6 @@
           openBtn.onclick = function () {
             textarea.value = p.code || '';
             setCurrentProject(p.id);
-            // синхронизируем с window.name
             try {
               window.name = JSON.stringify({ userCode: textarea.value });
             } catch (e) {}
@@ -343,7 +341,7 @@
       // --- Работа с текущим кодом / проектом ---
       clearBtn.addEventListener('click', function () {
         textarea.value = '';
-        // не сбрасываю проект, вдруг человек хочет очистить и потом сохранить
+        // проект не сбрасываем — можно очистить и сохранить новые изменения
       });
 
       saveBtn.addEventListener('click', function () {
@@ -351,6 +349,7 @@
         var now = new Date().toISOString();
 
         if (!currentProjectId) {
+          // создаём новый проект
           var name = prompt('Название проекта:', 'Новый проект');
           if (name === null) return; // отмена
           if (!name.trim()) name = 'Без названия';
@@ -366,9 +365,10 @@
           saveProjects();
           setCurrentProject(newProj.id);
         } else {
+          // обновляем существующий
           var existing = findProject(currentProjectId);
           if (!existing) {
-            // если вдруг проект потерялся, создаём новый
+            // если вдруг потерялся — создаём как новый
             var name2 = prompt('Название проекта:', 'Новый проект');
             if (name2 === null) return;
             if (!name2.trim()) name2 = 'Без названия';
@@ -402,7 +402,7 @@
         currentProjectId = null;
         updateProjectControlsUI();
         renderProjects();
-        // код в textarea не трогаем, пусть остаётся
+        // код в textarea не трогаем
       });
 
       // --- Плавающие кнопки RUN/STOP ---
@@ -493,8 +493,7 @@
                 document.open();
                 document.write(window.__RUNNER_ORIGINAL_HTML__);
                 document.close();
-                // после возврата в раннер — снова ставим RUN и отрисовываем проекты
-                // (скрипт выполнится заново)
+                // после возврата скрипт выполнится заново, проекты подгрузятся из localStorage
               } else {
                 location.reload();
               }
@@ -512,7 +511,7 @@
       // --- Инициализация ---
       // восстановление кода из window.name, если это не проект
       try {
-        if (!currentProjectId && window.name) {
+        if (window.name) {
           var state = JSON.parse(window.name);
           if (state && typeof state.userCode === 'string') {
             textarea.value = state.userCode;
